@@ -185,10 +185,12 @@ func (m *Manager) Run(tsets <-chan map[string][]*targetgroup.Group) {
 	for {
 		select {
 		case ts := <-tsets:
+			m.logger.Log("got new targets", ts)
 			m.updateTsets(ts)
 
 			select {
 			case m.triggerReload <- struct{}{}:
+				m.logger.Log("triggering reload")
 			default:
 			}
 
@@ -208,6 +210,7 @@ func (m *Manager) reloader() {
 	if m.opts.DiscoveryReloadOnStartup {
 		select {
 		case <-m.triggerReload:
+			m.logger.Log("reload triggered on start up")
 			m.reload()
 		case <-m.graceShut:
 			return
@@ -224,6 +227,7 @@ func (m *Manager) reloader() {
 		case <-ticker.C:
 			select {
 			case <-m.triggerReload:
+				m.logger.Log("reload triggered on default interval")
 				m.reload()
 			case <-m.graceShut:
 				return
@@ -234,6 +238,7 @@ func (m *Manager) reloader() {
 
 func (m *Manager) reload() {
 	m.mtxScrape.Lock()
+	m.logger.Log("reloading")
 	var wg sync.WaitGroup
 	for setName, groups := range m.targetSets {
 		if _, ok := m.scrapePools[setName]; !ok {
@@ -247,6 +252,7 @@ func (m *Manager) reload() {
 				level.Error(m.logger).Log("msg", "error creating new scrape pool", "err", err, "scrape_pool", setName)
 				continue
 			}
+			m.logger.Log("created scrape pools")
 			m.scrapePools[setName] = sp
 		}
 

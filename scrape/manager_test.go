@@ -795,7 +795,8 @@ func TestManagerStopAfterScrapeAttempt(t *testing.T) {
 				// Extremely high value to turn it off. We don't want to wait minimum 5s, so
 				// we reload manually.
 				// TODO(bwplotka): Make scrape manager more testable.
-				DiscoveryReloadInterval: model.Duration(99 * time.Hour),
+				DiscoveryReloadInterval:  model.Duration(99 * time.Hour),
+				DiscoveryReloadOnStartup: true,
 			}, log.NewLogfmtLogger(os.Stderr), &collectResultAppendable{app})
 
 			require.NoError(t, scrapeManager.ApplyConfig(&config.Config{
@@ -820,9 +821,8 @@ func TestManagerStopAfterScrapeAttempt(t *testing.T) {
 			serverURL, err := url.Parse(server.URL)
 			require.NoError(t, err)
 
-			// Add fake target directly into tsets + reload. Normally users would use
-			// Manager.Run and wait for minimum 5s refresh interval.
-			scrapeManager.updateTsets(map[string][]*targetgroup.Group{
+			tsets := make(chan map[string][]*targetgroup.Group, 1)
+			tsets <- map[string][]*targetgroup.Group{
 				"test": {
 					{
 						Targets: []model.LabelSet{{
@@ -831,8 +831,8 @@ func TestManagerStopAfterScrapeAttempt(t *testing.T) {
 						}},
 					},
 				},
-			})
-			scrapeManager.reload()
+			}
+			go scrapeManager.Run(tsets)
 
 			// Wait for the defined stop delay, before stopping.
 			time.Sleep(tcase.stopDelay)
